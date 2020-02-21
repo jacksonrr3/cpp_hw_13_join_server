@@ -15,7 +15,7 @@ class Session
     : public std::enable_shared_from_this<Session>
 {
 public:
-    Session(std::shared_ptr<ba::ip::tcp::socket> socket, std::set<std::shared_ptr<Session>>& cl, std::shared_ptr<data_base::Database> data):
+    Session(std::shared_ptr<ba::ip::tcp::socket> socket, std::set<std::shared_ptr<Session>>& cl, std::shared_ptr<data_base::Database> data) :
         socket_(socket),
         cl_(cl),
         db_(data)
@@ -28,8 +28,6 @@ public:
         session_mutex.lock();
         cl_.insert(shared_from_this());
         session_mutex.unlock();
-       // id_ = async::connect(bl_size_);
-       // buff_ = std::make_shared<std::array<char, buff_size>>();
         do_read();
     }
 
@@ -43,51 +41,44 @@ private:
                 if (!ec)
                 {
                     std::istream in(sb_.get());
-                    std::string line;
-                    std::getline(in, line);
-                    std::string res = db_->query(std::move(line));
-                    do_write(std::move(res));
-                //    async::receive(id_, buff_->data(), length);
-                //    do_read();
+                    std::getline(in, str_);
+                    do_write();
                 }
                 else
                 {
-                 //   async::disconnect(id_);
-                 //   session_mutex.lock();
+                    session_mutex.lock();
                     cl_.erase(shared_from_this());
-                 //   session_mutex.unlock();
+                    session_mutex.unlock();
                 }
             });
     }
 
-    void do_write(std::string&& str)
+    void do_write()
     {
-        str += "\n";
+        str_ = db_->query(std::move(str_));
+        str_ += "\n";
         auto self(shared_from_this());
-        socket_->async_write_some(boost::asio::buffer(str),
-            [this, self](boost::system::error_code ec, std::size_t length)
+        socket_->async_write_some(boost::asio::buffer(str_),
+            [this, self](boost::system::error_code ec, std::size_t /*length*/)
             {
                 if (!ec)
                 {
-                   // std::string res = db_->query(std::move(*buff_));
                     do_read();
-                    //    async::receive(id_, buff_->data(), length);
-                    //    do_read();
                 }
                 else
                 {
-                    //   async::disconnect(id_);
-                    //   session_mutex.lock();
+                    session_mutex.lock();
                     cl_.erase(shared_from_this());
-                    //   session_mutex.unlock();
+                    session_mutex.unlock();
                 }
             });
     }
 
-    std::shared_ptr<ba::ip::tcp::socket> socket_;
-    std::set<std::shared_ptr<Session>>& cl_;
-    std::shared_ptr<boost::asio::streambuf> sb_;
-    std::shared_ptr<data_base::Database> db_;
+    std::shared_ptr<ba::ip::tcp::socket> socket_;   
+    std::set<std::shared_ptr<Session>>& cl_;        //ссылка на контейнер с сессиями
+    std::shared_ptr<boost::asio::streambuf> sb_;    //указатель на буфер для ввода/вывода
+    std::shared_ptr<data_base::Database> db_;       //указатель на объект БД
+    std::string str_;                               //строка для хранения запроса от клиента и ответа от БД
 };
 
 
@@ -98,6 +89,7 @@ public:
         : service_(io_service),
         acceptor_(io_service, endpoint)
     {
+        data_= std::make_shared<data_base::Database>();
         socket_ = std::make_shared<ba::ip::tcp::socket>(service_);
         do_accept();
     }
