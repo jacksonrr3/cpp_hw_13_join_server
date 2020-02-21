@@ -9,9 +9,6 @@
 #include "data_base.h"
 
 namespace ba = boost::asio;
-
-const std::size_t buff_size = 1024;
-
 std::mutex session_mutex;
 
 class Session
