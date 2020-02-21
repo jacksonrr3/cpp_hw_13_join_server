@@ -20,6 +20,7 @@ public:
         cl_(cl),
         db_(data)
     {
+        sb_ = std::make_shared<boost::asio::streambuf>();
     }
 
     void start_session()
