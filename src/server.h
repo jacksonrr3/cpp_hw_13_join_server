@@ -39,12 +39,15 @@ private:
     void do_read()
     {
         auto self(shared_from_this());
-        socket_->async_read_some(boost::asio::buffer(*buff_),
+        async_read_until(*socket_, *sb_, '\n',
             [this, self](boost::system::error_code ec, std::size_t length)
             {
                 if (!ec)
                 {
-                    std::string res = db_->query(std::move(*buff_));
+                    std::istream in(sb_.get());
+                    std::string line;
+                    std::getline(in, line);
+                    std::string res = db_->query(std::move(line));
                     do_write(std::move(res));
                 //    async::receive(id_, buff_->data(), length);
                 //    do_read();
@@ -61,9 +64,9 @@ private:
 
     void do_write(std::string&& str)
     {
-        *buff_ = str;
+        str += "\n";
         auto self(shared_from_this());
-        socket_->async_write_some(boost::asio::buffer(*buff_),
+        socket_->async_write_some(boost::asio::buffer(str),
             [this, self](boost::system::error_code ec, std::size_t length)
             {
                 if (!ec)
@@ -85,7 +88,7 @@ private:
 
     std::shared_ptr<ba::ip::tcp::socket> socket_;
     std::set<std::shared_ptr<Session>>& cl_;
-    std::shared_ptr<std::string> buff_;
+    std::shared_ptr<boost::asio::streambuf> sb_;
     std::shared_ptr<data_base::Database> db_;
 };
 
